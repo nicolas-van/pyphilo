@@ -1,12 +1,10 @@
 
-import sqlalchemy
+import sqlalchemy as sa
 import sqlalchemy.orm
-import sqlalchemy.ext.declarative 
-from sqlalchemy import Column, Integer, String, Sequence, Boolean
-from sqlalchemy.orm import relationship
+import sqlalchemy.ext.declarative
 import threading
 
-class Engine:
+class _Engine:
     def __init__(self):
         self.engine = None
     def __getattr__(self, name):
@@ -14,7 +12,7 @@ class Engine:
             raise Exception("Global engine was not inited")
         return getattr(self.engine, name)
     def init_global_engine(self, *args, **kwargs):
-        self.engine = sqlalchemy.create_engine(*args, **kwargs)
+        self.engine = sa.create_engine(*args, **kwargs)
     def init_sqlite(self, file_name, *args, **kwargs):
         self.init_global_engine("sqlite:///" + file_name, *args, **kwargs)
 
@@ -22,36 +20,36 @@ class Engine:
 """
 A global engine that can be setted at the start of the application
 """
-engine = Engine()
+engine = _Engine()
 
-class Base(object):
+class _Base(object):
     
-    @sqlalchemy.ext.declarative.declared_attr
+    @sa.ext.declarative.declared_attr
     def __tablename__(cls):
         return cls.__name__.lower()
 
-    @sqlalchemy.ext.declarative.declared_attr
+    @sa.ext.declarative.declared_attr
     def id(cls):
-        return Column(Integer, Sequence(cls.__name__.lower() + "_id_seq"), primary_key=True)
+        return sa.Column(sa.Integer, sa.Sequence(cls.__name__.lower() + "_id_seq"), primary_key=True)
 
 """
     A default Base class for all entities. Automatically set the name of the database table
     and configure a default auto-incremented id.
 """
-Base = sqlalchemy.ext.declarative.declarative_base(cls=Base)
+Base = sa.ext.declarative.declarative_base(cls=_Base)
 
 def Many2One(class_name, **kwargs):
     """
         A helper to be used with the Base class, useful to specify many2one without having
         to specify the key table.
     """
-    return Column(Integer, sqlalchemy.ForeignKey(class_name.lower() + ".id"), **kwargs)
+    return sa.Column(sa.Integer, sa.ForeignKey(class_name.lower() + ".id"), **kwargs)
 
 _local_test = threading.local()
 
-class ThreadSession:
+class _ThreadSession:
     def __init__(self, session_class):
-        self._session_class = sqlalchemy.orm.scoped_session(session_class)
+        self._session_class = sa.orm.scoped_session(session_class)
     def __getattr__(self, name):
         if getattr(_local_test, "test", 0) == 0:
             raise Exception("Trying to use the database session outside of a transactionnal context")
@@ -66,7 +64,7 @@ class ThreadSession:
     A thread-binded session. Uses the global engine. Designed to be used
     with the @transactionnal decorator.
 """
-session = ThreadSession(sqlalchemy.orm.sessionmaker(bind=engine))
+session = _ThreadSession(sa.orm.sessionmaker(bind=engine))
 
 def transactionnal(fct):
     """
@@ -106,5 +104,8 @@ def init_db():
     return False
 
 def drop_db():
+    """
+        Drop all the tables of the databe.
+    """
     Base.metadata.drop_all(engine)
 
