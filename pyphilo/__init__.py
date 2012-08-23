@@ -3,6 +3,7 @@ import sqlalchemy as sa
 import sqlalchemy.orm
 import sqlalchemy.ext.declarative
 import threading
+import re
 
 class _Engine:
     def __init__(self):
@@ -16,6 +17,22 @@ class _Engine:
     def init_sqlite(self, file_name, *args, **kwargs):
         self.init_global_engine("sqlite:///" + file_name, *args, **kwargs)
 
+_table_name_re = re.compile("[A-Z]")
+
+def to_table_name(name):
+    """
+        Transforms a table name into a dabase name.
+    """
+    name = name[0].lower() + name[1:]
+    nname = ""
+    last = 0
+    for r in _table_name_re.finditer(name):
+        nname += name[last:r.start()] + "_" + name[r.start()].lower()
+        last = r.start() + 1
+    nname += name[last:]
+    return nname
+
+
 
 """
 A global engine that can be setted at the start of the application
@@ -26,11 +43,11 @@ class _Base(object):
     
     @sa.ext.declarative.declared_attr
     def __tablename__(cls):
-        return cls.__name__.lower()
+        return to_table_name(cls.__name__)
 
     @sa.ext.declarative.declared_attr
     def id(cls):
-        return sa.Column(sa.Integer, sa.Sequence(cls.__name__.lower() + "_id_seq"), primary_key=True)
+        return sa.Column(sa.Integer, sa.Sequence(to_table_name(cls.__name__) + "_id_seq"), primary_key=True)
 
 """
     A default Base class for all entities. Automatically set the name of the database table
@@ -43,7 +60,7 @@ def Many2One(class_name, **kwargs):
         A helper to be used with the Base class, useful to specify many2one without having
         to specify the key table.
     """
-    return sa.Column(sa.Integer, sa.ForeignKey(class_name.lower() + ".id"), **kwargs)
+    return sa.Column(sa.Integer, sa.ForeignKey(to_table_name(class_name) + ".id"), **kwargs)
 
 _local_test = threading.local()
 
